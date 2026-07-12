@@ -8,6 +8,24 @@
 .venv\Scripts\python.exe app.py
 ```
 
+## 開発環境
+
+Python 3.10〜3.12を推奨します。
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv\Scripts\python.exe -m unittest discover -v
+```
+
+## Windows EXEの作成
+
+```powershell
+.\build.ps1
+```
+
+テスト成功後、コンソールを表示しない単体実行ファイル`dist\Annotator.exe`が生成されます。`dist`はGit管理対象外です。GitHub Releasesにはソースではなく、このEXEをリリース成果物として添付してください。
+
 ## 推奨プロジェクト構成
 
 ```text
