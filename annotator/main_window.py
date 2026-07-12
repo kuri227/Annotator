@@ -183,8 +183,7 @@ class MainWindow(QMainWindow):
         self.progress.setMaximum(len(self.session.files)); self.progress.setValue(self.session.completed)
         self.progress.setFormat(f"完了 {self.session.completed} / {len(self.session.files)}")
         if self.session.config.media_type == MediaType.AUDIO:
-            self.audio_viewer.load(path)
-            if self.autoplay.isChecked(): self.audio_viewer.player.play()
+            self.audio_viewer.load(path, autoplay=self.autoplay.isChecked())
         else: self.image_viewer.load(path)
 
     def _toggle_label(self, label: str, checked: bool | None = None) -> None:

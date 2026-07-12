@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import QTimer, Qt, QUrl, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
@@ -45,6 +45,8 @@ class AudioViewer(QWidget):
         self.output = QAudioOutput(self)
         self.output.setVolume(0.8)
         self.player.setAudioOutput(self.output)
+        self._load_id = 0
+        self._autoplay_pending = False
 
         self.waveform = WaveformWidget()
         self.title = QLabel("音声を選択してください")
@@ -82,16 +84,27 @@ class AudioViewer(QWidget):
         self.player.mediaStatusChanged.connect(self._status_changed)
         self.player.errorOccurred.connect(self._playback_error)
 
-    def load(self, path: Path) -> None:
+    def load(self, path: Path, autoplay: bool = False) -> None:
+        self._load_id += 1
+        load_id = self._load_id
         self.player.stop()
+        self.player.setSource(QUrl())
+        self._autoplay_pending = autoplay
         self.error_label.clear()
         self.title.setText(path.name)
         self.waveform.set_audio(path)
-        self.player.setSource(QUrl.fromLocalFile(str(path)))
+        # Yield to Qt so the previous decoder can release resources first.
+        QTimer.singleShot(0, lambda: self._set_source(load_id, path))
+
+    def _set_source(self, load_id: int, path: Path) -> None:
+        if load_id == self._load_id:
+            self.player.setSource(QUrl.fromLocalFile(str(path)))
 
     def clear(self) -> None:
         """Release the media file handle, particularly important on Windows."""
         self.player.stop()
+        self._load_id += 1
+        self._autoplay_pending = False
         self.player.setSource(QUrl())
         self.title.setText("音声を選択してください")
 
@@ -114,6 +127,9 @@ class AudioViewer(QWidget):
         self.time.setText(f"{format_time(value)} / {format_time(duration)}")
 
     def _status_changed(self, status) -> None:
+        if status == QMediaPlayer.MediaStatus.LoadedMedia and self._autoplay_pending:
+            self._autoplay_pending = False
+            self.player.play()
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             self.ended.emit()
 

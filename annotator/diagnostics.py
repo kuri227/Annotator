@@ -14,17 +14,27 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 class ErrorReporter:
     def __init__(self, log_dir: Path | None = None):
         base = log_dir or Path.home() / "AppData" / "Local" / "Annotator" / "logs"
-        try:
-            base.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            base = Path(tempfile.gettempdir()) / "Annotator" / "logs"
-            base.mkdir(parents=True, exist_ok=True)
-        self.log_path = base / "annotator.log"
         self.logger = logging.getLogger(f"annotator.{id(self)}")
         self.logger.setLevel(logging.ERROR)
         self.logger.propagate = False
-        handler = RotatingFileHandler(self.log_path, maxBytes=1_000_000, backupCount=2, encoding="utf-8")
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        self.log_path = base / "annotator.log"
+        handler = None
+        candidates = [base]
+        fallback = Path(tempfile.gettempdir()) / "Annotator" / "logs"
+        if fallback != base:
+            candidates.append(fallback)
+        for candidate in candidates:
+            try:
+                candidate.mkdir(parents=True, exist_ok=True)
+                self.log_path = candidate / "annotator.log"
+                handler = RotatingFileHandler(self.log_path, maxBytes=1_000_000, backupCount=2, encoding="utf-8")
+                break
+            except OSError:
+                handler = None
+        if handler is None:
+            handler = logging.NullHandler()
+        else:
+            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         self.logger.addHandler(handler)
         self._notification_pending = False
 

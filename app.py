@@ -5,11 +5,12 @@ import sys
 
 # Qt Multimedia's FFmpeg backend is verbose on Windows.  These settings must be
 # applied before importing PySide6 and keep normal production runs silent.
-os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false;qt.multimedia.ffmpeg.*=false")
-os.environ.setdefault("QT_FFMPEG_DEBUG", "0")
+os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.multimedia.ffmpeg=false;qt.multimedia.ffmpeg.*=false"
+os.environ.pop("QT_FFMPEG_DEBUG", None)
 
 from annotator.diagnostics import ErrorReporter, ResilientApplication
 from annotator.main_window import MainWindow
+from PySide6.QtGui import QFont
 
 
 def main() -> int:
@@ -19,6 +20,7 @@ def main() -> int:
     app.setApplicationName("Annotator")
     app.setApplicationVersion("5.2.0")
     app.setOrganizationName("Annotator")
+    app.setFont(QFont("Segoe UI", 10))
     app.aboutToQuit.connect(reporter.close)
     window = MainWindow()
     window.show()

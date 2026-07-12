@@ -3,10 +3,16 @@ import unittest
 import wave
 import csv
 import json
+import time
+import struct
+import os
 from pathlib import Path
+
+os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.multimedia.ffmpeg=false;qt.multimedia.ffmpeg.*=false"
 
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
+from PySide6.QtTest import QTest
 
 from annotator.models import MediaType, ProjectConfig
 from annotator.models import Session
@@ -18,6 +24,18 @@ from annotator.file_overview import matching_indices
 
 
 class CoreTests(unittest.TestCase):
+    def test_corrupt_wav_with_huge_declared_size_is_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "corrupt.wav"
+            header = (b"RIFF" + struct.pack("<I", 0xFFFFFFF0) + b"WAVEfmt " +
+                      struct.pack("<IHHIIHH", 16, 1, 1, 8000, 16000, 2, 16) +
+                      b"data" + struct.pack("<I", 0xFFFFFF00) + b"\0\0" * 20)
+            path.write_bytes(header)
+            started = time.monotonic()
+            values = read_waveform(path)
+            self.assertLess(time.monotonic() - started, 0.5)
+            self.assertLessEqual(len(values), 1200)
+
     def test_error_reporter_records_exception_without_raising(self):
         with tempfile.TemporaryDirectory() as directory:
             reporter = ErrorReporter(Path(directory))
@@ -113,12 +131,34 @@ class InterfaceIntegrationTests(unittest.TestCase):
             audio = root / "raw_data" / "animals.wav"
             with wave.open(str(audio), "wb") as output:
                 output.setparams((1, 2, 8000, 80, "NONE", "not compressed")); output.writeframes(b"\0\0" * 80)
-            window._show_current(); window._toggle_label("dog", True); window._toggle_label("cat", True)
-            self.assertEqual(window.audio_viewer.title.text(), "animals.wav")
-            self.assertTrue(window.audio_viewer.waveform._values)
-            self.assertEqual(window.session.annotations["animals.wav"], ["dog", "cat"])
-            window.audio_viewer.clear(); self.app.processEvents()
-            window.session.dirty = False; window.close()
+            try:
+                window._show_current(); window._toggle_label("dog", True); window._toggle_label("cat", True)
+                deadline = time.monotonic() + 2
+                while window.audio_viewer.waveform._tasks and time.monotonic() < deadline:
+                    QTest.qWait(20)
+                self.assertEqual(window.audio_viewer.title.text(), "animals.wav")
+                self.assertTrue(window.audio_viewer.waveform._values)
+                self.assertEqual(window.session.annotations["animals.wav"], ["dog", "cat"])
+            finally:
+                window.audio_viewer.clear(); self.app.processEvents()
+                window.session.dirty = False; window.close()
+
+    def test_rapid_audio_switch_keeps_ui_responsive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); window = self._window_with_project(root, MediaType.AUDIO, "first.wav")
+            paths = [root / "raw_data" / name for name in ("first.wav", "second.wav")]
+            for path in paths:
+                with wave.open(str(path), "wb") as output:
+                    output.setparams((1, 2, 8000, 800, "NONE", "not compressed")); output.writeframes(b"\0\0" * 800)
+            try:
+                for index in range(30):
+                    window.audio_viewer.load(paths[index % 2], autoplay=False)
+                    self.app.processEvents()
+                QTest.qWait(300)
+                self.assertEqual(window.audio_viewer.title.text(), "second.wav")
+                self.assertTrue(window.isEnabled())
+            finally:
+                window.audio_viewer.clear(); self.app.processEvents(); window.close()
 
 
 if __name__ == "__main__":
