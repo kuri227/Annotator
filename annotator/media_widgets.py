@@ -87,13 +87,13 @@ class AudioViewer(QWidget):
     def load(self, path: Path, autoplay: bool = False) -> None:
         self._load_id += 1
         load_id = self._load_id
-        self.player.stop()
-        self.player.setSource(QUrl())
         self._autoplay_pending = autoplay
         self.error_label.clear()
         self.title.setText(path.name)
         self.waveform.set_audio(path)
-        # Yield to Qt so the previous decoder can release resources first.
+        # Never call stop() while FFmpeg is decoding. On some malformed/junk-
+        # prefixed files that call can block the GUI thread. setSource() performs
+        # the supported source transition itself on the next event-loop turn.
         QTimer.singleShot(0, lambda: self._set_source(load_id, path))
 
     def _set_source(self, load_id: int, path: Path) -> None:
@@ -102,7 +102,6 @@ class AudioViewer(QWidget):
 
     def clear(self) -> None:
         """Release the media file handle, particularly important on Windows."""
-        self.player.stop()
         self._load_id += 1
         self._autoplay_pending = False
         self.player.setSource(QUrl())

@@ -160,6 +160,26 @@ class InterfaceIntegrationTests(unittest.TestCase):
             finally:
                 window.audio_viewer.clear(); self.app.processEvents(); window.close()
 
+    def test_navigation_while_autoplaying_returns_immediately(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); window = self._window_with_project(root, MediaType.AUDIO, "first.wav")
+            raw = root / "raw_data"
+            paths = [raw / "first.wav", raw / "second.wav"]
+            for path in paths:
+                with wave.open(str(path), "wb") as output:
+                    output.setparams((1, 2, 8000, 8000, "NONE", "not compressed")); output.writeframes(b"\0\0" * 8000)
+            window.session.files = paths
+            try:
+                window._show_current()
+                QTest.qWait(250)
+                started = time.monotonic()
+                window._move(1)
+                self.assertLess(time.monotonic() - started, 0.1)
+                self.assertEqual(window.session.current_index, 1)
+                self.assertEqual(window.audio_viewer.title.text(), "second.wav")
+            finally:
+                window.audio_viewer.clear(); self.app.processEvents(); window.close()
+
 
 if __name__ == "__main__":
     unittest.main()
