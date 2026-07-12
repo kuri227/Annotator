@@ -50,6 +50,9 @@ class AudioViewer(QWidget):
         self.title = QLabel("音声を選択してください")
         self.title.setObjectName("MediaTitle")
         self.time = QLabel("00:00 / 00:00")
+        self.error_label = QLabel()
+        self.error_label.setStyleSheet("color:#fca5a5")
+        self.error_label.setWordWrap(True)
         self.play = QPushButton("▶  再生 / 一時停止  [Space]")
         self.back = QPushButton("−5秒  [J]")
         self.forward = QPushButton("+5秒  [L]")
@@ -65,7 +68,7 @@ class AudioViewer(QWidget):
         controls.addWidget(QLabel("音量")); controls.addWidget(self.volume)
         layout = QVBoxLayout(self)
         layout.addWidget(self.title); layout.addWidget(self.waveform, 1)
-        layout.addWidget(self.position); layout.addWidget(self.time); layout.addLayout(controls)
+        layout.addWidget(self.position); layout.addWidget(self.time); layout.addWidget(self.error_label); layout.addLayout(controls)
 
         self.play.clicked.connect(self.toggle)
         self.back.clicked.connect(lambda: self.skip(-5000))
@@ -77,9 +80,11 @@ class AudioViewer(QWidget):
         self.player.positionChanged.connect(self._position_changed)
         self.player.durationChanged.connect(lambda duration: self.position.setRange(0, duration))
         self.player.mediaStatusChanged.connect(self._status_changed)
+        self.player.errorOccurred.connect(self._playback_error)
 
     def load(self, path: Path) -> None:
         self.player.stop()
+        self.error_label.clear()
         self.title.setText(path.name)
         self.waveform.set_audio(path)
         self.player.setSource(QUrl.fromLocalFile(str(path)))
@@ -111,3 +116,7 @@ class AudioViewer(QWidget):
     def _status_changed(self, status) -> None:
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             self.ended.emit()
+
+    def _playback_error(self, error, message: str) -> None:
+        self.error_label.setText(f"再生できません: {message or '未対応または破損した音声形式です'}")
+        self.play.setEnabled(True)

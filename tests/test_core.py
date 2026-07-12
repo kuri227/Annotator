@@ -11,12 +11,35 @@ from PySide6.QtWidgets import QApplication
 from annotator.models import MediaType, ProjectConfig
 from annotator.models import Session
 from annotator.main_window import MainWindow
+from annotator.diagnostics import ErrorReporter
 from annotator.storage import discover_files, load_annotations, save_annotations
 from annotator.waveform import read_waveform
 from annotator.file_overview import matching_indices
 
 
 class CoreTests(unittest.TestCase):
+    def test_error_reporter_records_exception_without_raising(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reporter = ErrorReporter(Path(directory))
+            try:
+                raise RuntimeError("intentional recovery test")
+            except RuntimeError as error:
+                reporter.report(type(error), error, error.__traceback__, notify=False)
+            for handler in reporter.logger.handlers:
+                handler.flush()
+            self.assertIn("intentional recovery test", reporter.log_path.read_text(encoding="utf-8"))
+            reporter.close()
+
+    def test_atomic_save_preserves_previous_file_on_serialization_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); path = root / "labels.json"
+            path.write_text('{"safe.wav": ["dog"]}', encoding="utf-8")
+            config = ProjectConfig(root, root / "raw_data", root / "input_data", path, "audio", ["dog"])
+            with self.assertRaises(TypeError):
+                save_annotations(config, {"broken.wav": [object()]})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"safe.wav": ["dog"]})
+            self.assertFalse(list(root.glob(".*.tmp")))
+
     def test_overview_filters_labeled_and_unlabeled_files(self):
         root = Path("project")
         config = ProjectConfig(root, root / "raw_data", root / "input_data", root / "labels.csv", "audio", ["speech"])

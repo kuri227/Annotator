@@ -8,16 +8,18 @@ import sys
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false;qt.multimedia.ffmpeg.*=false")
 os.environ.setdefault("QT_FFMPEG_DEBUG", "0")
 
-from PySide6.QtWidgets import QApplication
-
+from annotator.diagnostics import ErrorReporter, ResilientApplication
 from annotator.main_window import MainWindow
 
 
 def main() -> int:
-    app = QApplication(sys.argv)
+    reporter = ErrorReporter()
+    sys.excepthook = reporter.report
+    app = ResilientApplication(sys.argv, reporter)
     app.setApplicationName("Annotator")
-    app.setApplicationVersion("5.1.0")
+    app.setApplicationVersion("5.2.0")
     app.setOrganizationName("Annotator")
+    app.aboutToQuit.connect(reporter.close)
     window = MainWindow()
     window.show()
     return app.exec()

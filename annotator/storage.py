@@ -1,6 +1,8 @@
 import csv
 import json
 import shutil
+import os
+import tempfile
 from pathlib import Path
 
 from .models import MediaType, ProjectConfig
@@ -36,26 +38,42 @@ def load_annotations(path: Path) -> dict[str, list[str]]:
         return {}
 
 
-def save_annotations(config: ProjectConfig, annotations: dict[str, list[str]]) -> None:
+def save_annotations(config: ProjectConfig, annotations: dict[str, list[str]]) -> list[str]:
+    """Atomically save labels and copy data; return non-fatal copy failures."""
     config.annotation_file.parent.mkdir(parents=True, exist_ok=True)
-    if config.annotation_file.suffix.lower() == ".json":
-        config.annotation_file.write_text(
-            json.dumps(annotations, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-    else:
-        with config.annotation_file.open("w", encoding="utf-8-sig", newline="") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(["filename", "labels"])
-            for filename, labels in sorted(annotations.items()):
-                writer.writerow([filename, json.dumps(labels, ensure_ascii=False)])
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{config.annotation_file.name}.", suffix=".tmp",
+        dir=config.annotation_file.parent,
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        if config.annotation_file.suffix.lower() == ".json":
+            temporary.write_text(json.dumps(annotations, ensure_ascii=False, indent=2), encoding="utf-8")
+        else:
+            with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["filename", "labels"])
+                for filename, labels in sorted(annotations.items()):
+                    writer.writerow([filename, json.dumps(labels, ensure_ascii=False)])
+        os.replace(temporary, config.annotation_file)
+    finally:
+        temporary.unlink(missing_ok=True)
 
+    failures = []
     config.input_dir.mkdir(parents=True, exist_ok=True)
     for filename in annotations:
-        source = config.raw_dir / filename
-        if source.is_file():
+        try:
+            source = config.raw_dir / filename
+            if not source.is_file():
+                failures.append(f"{filename}: 元ファイルがありません")
+                continue
             destination = config.input_dir / filename
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+        except OSError as error:
+            failures.append(f"{filename}: {error}")
+    return failures
 
 
 def discover_files(config: ProjectConfig) -> list[Path]:

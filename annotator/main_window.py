@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.session: Session | None = None
         self.label_buttons: list[QPushButton] = []
-        self.setWindowTitle("Annotator 5.1")
+        self.setWindowTitle("Annotator 5.2")
         self.resize(1280, 820)
         self.setStyleSheet(STYLE)
         self.pages = QStackedWidget()
@@ -249,9 +249,16 @@ class MainWindow(QMainWindow):
     def _save(self) -> None:
         if not self.session: return
         try:
-            save_annotations(self.session.config, self.session.annotations); self.session.dirty = False
-            QMessageBox.information(self, "保存完了", f"{len(self.session.annotations)}件のアノテーションを保存しました。")
-        except OSError as error: QMessageBox.critical(self, "保存エラー", str(error))
+            failures = save_annotations(self.session.config, self.session.annotations)
+            self.session.dirty = False
+            if failures:
+                preview = "\n".join(failures[:5])
+                QMessageBox.warning(self, "保存完了（一部コピー失敗）",
+                                    f"ラベルは安全に保存されました。\nコピー失敗: {len(failures)}件\n{preview}")
+            else:
+                QMessageBox.information(self, "保存完了", f"{len(self.session.annotations)}件のアノテーションを保存しました。")
+        except Exception as error:
+            QMessageBox.critical(self, "保存エラー", f"元の保存データは保護されています。\n{error}")
 
     def _back(self) -> None:
         if self._confirm_discard(): self.audio_viewer.clear(); self.pages.setCurrentIndex(0)
