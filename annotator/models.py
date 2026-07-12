@@ -27,7 +27,7 @@ class ProjectConfig:
 class Session:
     config: ProjectConfig
     files: list[Path] = field(default_factory=list)
-    annotations: dict[str, str] = field(default_factory=dict)
+    annotations: dict[str, list[str]] = field(default_factory=dict)
     current_index: int = 0
     dirty: bool = False
 

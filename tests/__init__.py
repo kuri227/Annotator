@@ -1,1 +1,1 @@
-"""Automated tests for DCON Annotator."""
+"""Automated tests for Annotator."""

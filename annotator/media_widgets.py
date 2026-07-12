@@ -84,6 +84,12 @@ class AudioViewer(QWidget):
         self.waveform.set_audio(path)
         self.player.setSource(QUrl.fromLocalFile(str(path)))
 
+    def clear(self) -> None:
+        """Release the media file handle, particularly important on Windows."""
+        self.player.stop()
+        self.player.setSource(QUrl())
+        self.title.setText("音声を選択してください")
+
     def toggle(self) -> None:
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.pause()

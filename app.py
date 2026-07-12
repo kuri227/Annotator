@@ -1,4 +1,4 @@
-"""DCON Annotator entry point."""
+"""Annotator application entry point."""
 
 import sys
 
@@ -9,7 +9,7 @@ from annotator.main_window import MainWindow
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("DCON Annotator")
+    app.setApplicationName("Annotator")
     window = MainWindow()
     window.show()
     return app.exec()

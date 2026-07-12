@@ -22,6 +22,7 @@ QPushButton { background:#334155; border:0; border-radius:5px; padding:9px; font
 QPushButton:hover { background:#475569; } QPushButton:disabled { color:#64748b; }
 QPushButton#Primary { background:#0284c7; } QPushButton#Primary:hover { background:#0ea5e9; }
 QPushButton#LabelButton { text-align:left; padding:11px; }
+QPushButton#LabelButton:checked { background:#0369a1; border:2px solid #38bdf8; }
 QLabel#MediaTitle { font-size:18px; font-weight:700; padding:8px; }
 QFrame#Sidebar { background:#172033; border-left:1px solid #334155; }
 QProgressBar { border:0; background:#1e293b; border-radius:4px; text-align:center; }
@@ -33,7 +34,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.session: Session | None = None
-        self.setWindowTitle("DCON Annotator 5.0")
+        self.label_buttons: list[QPushButton] = []
+        self.setWindowTitle("Annotator 5.1")
         self.resize(1280, 820)
         self.setStyleSheet(STYLE)
         self.pages = QStackedWidget()
@@ -45,7 +47,7 @@ class MainWindow(QMainWindow):
     def _build_setup(self) -> None:
         page = QWidget(); outer = QVBoxLayout(page)
         outer.setContentsMargins(80, 45, 80, 45)
-        title = QLabel("DCON Annotator"); title.setStyleSheet("font-size:30px;font-weight:700")
+        title = QLabel("Annotator"); title.setStyleSheet("font-size:30px;font-weight:700")
         subtitle = QLabel("画像・音声の分類教師データを、迷わず高速に作成")
         outer.addWidget(title); outer.addWidget(subtitle)
 
@@ -89,19 +91,23 @@ class MainWindow(QMainWindow):
         self.position_label.setStyleSheet("color:#94a3b8;font-weight:600")
         self.file_label = QLabel("-"); self.file_label.setWordWrap(True); self.file_label.setStyleSheet("font-size:16px;font-weight:700")
         self.current_label = QLabel("未分類"); self.current_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.current_label.setWordWrap(True)
         self.current_label.setStyleSheet("background:#1e293b;color:#38bdf8;padding:16px;border-radius:6px;font-size:22px;font-weight:700")
         side.addWidget(self.position_label); side.addWidget(self.file_label); side.addWidget(self.current_label)
         self.progress = QProgressBar(); side.addWidget(self.progress)
         overview = QPushButton("ファイル一覧・未分類を確認")
         overview.clicked.connect(self._show_overview); side.addWidget(overview)
         nav = QHBoxLayout(); prev = QPushButton("← 前へ"); nxt = QPushButton("次へ →"); prev.clicked.connect(lambda: self._move(-1)); nxt.clicked.connect(lambda: self._move(1)); nav.addWidget(prev); nav.addWidget(nxt); side.addLayout(nav)
-        side.addWidget(QLabel("クラス（選択すると自動で次へ）"))
+        side.addWidget(QLabel("クラス（複数選択可）"))
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.label_host = QWidget(); self.label_layout = QVBoxLayout(self.label_host); self.label_layout.setContentsMargins(0, 0, 0, 0)
         scroll.setWidget(self.label_host); side.addWidget(scroll, 1)
+        commit_next = QPushButton("選択を確定して次へ  [Enter]")
+        commit_next.setObjectName("Primary"); commit_next.clicked.connect(self._confirm_and_next)
+        side.addWidget(commit_next)
         self.autoplay = QPushButton("自動再生: ON"); self.autoplay.setCheckable(True); self.autoplay.setChecked(True)
         self.autoplay.clicked.connect(lambda checked: self.autoplay.setText(f"自動再生: {'ON' if checked else 'OFF'}")); side.addWidget(self.autoplay)
-        shortcuts = QLabel("Space 再生/一時停止  •  J/L ±5秒\n←/→ 前後  •  S 保留  •  Ctrl+S 保存")
+        shortcuts = QLabel("数字 ラベル切替  •  Enter 確定して次へ\nSpace 再生/一時停止  •  J/L ±5秒\n←/→ 前後  •  S 保留  •  Ctrl+S 保存")
         shortcuts.setStyleSheet("color:#94a3b8"); side.addWidget(shortcuts)
         save = QPushButton("保存  [Ctrl+S]"); save.setObjectName("Primary"); save.clicked.connect(self._save); side.addWidget(save)
         layout.addWidget(sidebar); self.pages.addWidget(page)
@@ -109,7 +115,9 @@ class MainWindow(QMainWindow):
     def _install_shortcuts(self) -> None:
         for key, callback in (("Left", lambda: self._move(-1)), ("Right", lambda: self._move(1)),
                               ("Space", self._toggle_audio), ("J", lambda: self.audio_viewer.skip(-5000)),
-                              ("L", lambda: self.audio_viewer.skip(5000)), ("S", self._skip), ("Ctrl+S", self._save)):
+                              ("L", lambda: self.audio_viewer.skip(5000)), ("S", self._skip),
+                              ("Return", self._confirm_and_next), ("Enter", self._confirm_and_next),
+                              ("Ctrl+S", self._save)):
             action = QAction(self); action.setShortcut(QKeySequence(key)); action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut); action.triggered.connect(callback); self.addAction(action)
         for index, key in enumerate(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]):
             action = QAction(self); action.setShortcut(QKeySequence(key)); action.triggered.connect(lambda checked=False, i=index: self._label_by_index(i)); self.addAction(action)
@@ -155,17 +163,23 @@ class MainWindow(QMainWindow):
             item = self.label_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
         assert self.session
+        self.label_buttons = []
         for index, label in enumerate(self.session.config.labels):
             key = index + 1 if index < 9 else 0
             button = QPushButton(f"{key}    {label}"); button.setObjectName("LabelButton")
-            button.clicked.connect(lambda checked=False, value=label: self._set_label(value)); self.label_layout.addWidget(button)
+            button.setCheckable(True)
+            button.clicked.connect(lambda checked=False, value=label: self._toggle_label(value, checked))
+            self.label_buttons.append(button); self.label_layout.addWidget(button)
         self.label_layout.addStretch()
 
     def _show_current(self) -> None:
         if not self.session or not self.session.current_file: return
         path = self.session.current_file; name = str(path.relative_to(self.session.config.raw_dir)).replace("\\", "/")
         self.position_label.setText(f"現在位置: {self.session.current_index + 1} / {len(self.session.files)} 件目")
-        self.file_label.setText(name); self.current_label.setText(self.session.annotations.get(name, "未分類"))
+        selected = self.session.annotations.get(name, [])
+        self.file_label.setText(name); self.current_label.setText(" / ".join(selected) or "未分類")
+        for button, label in zip(self.label_buttons, self.session.config.labels):
+            button.blockSignals(True); button.setChecked(label in selected); button.blockSignals(False)
         self.progress.setMaximum(len(self.session.files)); self.progress.setValue(self.session.completed)
         self.progress.setFormat(f"完了 {self.session.completed} / {len(self.session.files)}")
         if self.session.config.media_type == MediaType.AUDIO:
@@ -173,13 +187,41 @@ class MainWindow(QMainWindow):
             if self.autoplay.isChecked(): self.audio_viewer.player.play()
         else: self.image_viewer.load(path)
 
-    def _set_label(self, label: str) -> None:
+    def _toggle_label(self, label: str, checked: bool | None = None) -> None:
         if not self.session or not self.session.current_file: return
         name = str(self.session.current_file.relative_to(self.session.config.raw_dir)).replace("\\", "/")
-        self.session.annotations[name] = label; self.session.dirty = True; self._move(1)
+        selected = list(self.session.annotations.get(name, []))
+        should_add = label not in selected if checked is None else checked
+        if should_add and label not in selected:
+            selected.append(label)
+        elif not should_add and label in selected:
+            selected.remove(label)
+        selected.sort(key=self.session.config.labels.index)
+        if selected:
+            self.session.annotations[name] = selected
+        else:
+            self.session.annotations.pop(name, None)
+        self.session.dirty = True
+        self.current_label.setText(" / ".join(selected) or "未分類")
+        self.progress.setValue(self.session.completed)
+        self.progress.setFormat(f"完了 {self.session.completed} / {len(self.session.files)}")
 
     def _label_by_index(self, index: int) -> None:
-        if self.pages.currentIndex() == 1 and self.session and index < len(self.session.config.labels): self._set_label(self.session.config.labels[index])
+        if self.pages.currentIndex() == 1 and self.session and index < len(self.session.config.labels):
+            self._toggle_label(self.session.config.labels[index])
+            self.label_buttons[index].blockSignals(True)
+            self.label_buttons[index].setChecked(self.session.config.labels[index] in self._current_labels())
+            self.label_buttons[index].blockSignals(False)
+
+    def _current_labels(self) -> list[str]:
+        if not self.session or not self.session.current_file:
+            return []
+        name = str(self.session.current_file.relative_to(self.session.config.raw_dir)).replace("\\", "/")
+        return self.session.annotations.get(name, [])
+
+    def _confirm_and_next(self) -> None:
+        if self.pages.currentIndex() == 1 and self._current_labels():
+            self._move(1)
 
     def _move(self, amount: int) -> None:
         if not self.session or self.pages.currentIndex() != 1: return
@@ -212,11 +254,15 @@ class MainWindow(QMainWindow):
         except OSError as error: QMessageBox.critical(self, "保存エラー", str(error))
 
     def _back(self) -> None:
-        if self._confirm_discard(): self.audio_viewer.player.stop(); self.pages.setCurrentIndex(0)
+        if self._confirm_discard(): self.audio_viewer.clear(); self.pages.setCurrentIndex(0)
 
     def _confirm_discard(self) -> bool:
         if not self.session or not self.session.dirty: return True
         return QMessageBox.question(self, "未保存の変更", "保存していない変更を破棄しますか？") == QMessageBox.StandardButton.Yes
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        event.accept() if self._confirm_discard() else event.ignore()
+        if self._confirm_discard():
+            self.audio_viewer.clear()
+            event.accept()
+        else:
+            event.ignore()

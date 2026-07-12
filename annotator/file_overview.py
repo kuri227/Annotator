@@ -81,13 +81,13 @@ class FileOverviewDialog(QDialog):
         self.table.setRowCount(len(visible))
         for row, index in enumerate(visible):
             name = relative_name(self.session, index)
-            label = self.session.annotations.get(name)
-            values = (str(index + 1), "✓ 分類済み" if label else "○ 未分類", label or "—", name)
+            labels = self.session.annotations.get(name, [])
+            values = (str(index + 1), "✓ 分類済み" if labels else "○ 未分類", " / ".join(labels) or "—", name)
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setData(Qt.ItemDataRole.UserRole, index)
                 if column == 1:
-                    item.setForeground(Qt.GlobalColor.green if label else Qt.GlobalColor.yellow)
+                    item.setForeground(Qt.GlobalColor.green if labels else Qt.GlobalColor.yellow)
                 self.table.setItem(row, column, item)
         total = len(self.session.files); completed = self.session.completed
         self.summary.setText(f"分類済み {completed}件  •  未分類 {total - completed}件  •  全{total}件")
