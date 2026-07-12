@@ -1,0 +1,56 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local Codex/agent workspace metadata
+.agents/
+.codex/
+
+# User projects and generated annotation data
+# Remove these rules only when intentionally publishing a small sample dataset.
+raw_data/
+input_data/
+annotations/
+
+# Common media files: prevent accidental commits of datasets located elsewhere
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.webp
+
+# Local logs and temporary files
+*.log
+*.tmp
+*.bak
+~$*
