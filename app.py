@@ -18,7 +18,7 @@ def main() -> int:
     sys.excepthook = reporter.report
     app = ResilientApplication(sys.argv, reporter)
     app.setApplicationName("Annotator")
-    app.setApplicationVersion("5.2.0")
+    app.setApplicationVersion("5.3.0")
     app.setOrganizationName("Annotator")
     app.setFont(QFont("Segoe UI", 10))
     app.aboutToQuit.connect(reporter.close)

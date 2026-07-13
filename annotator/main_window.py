@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.session: Session | None = None
         self.label_buttons: list[QPushButton] = []
-        self.setWindowTitle("Annotator 5.2")
+        self.setWindowTitle("Annotator 5.3")
         self.resize(1280, 820)
         self.setStyleSheet(STYLE)
         self.pages = QStackedWidget()

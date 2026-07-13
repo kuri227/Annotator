@@ -133,11 +133,16 @@ class InterfaceIntegrationTests(unittest.TestCase):
                 output.setparams((1, 2, 8000, 80, "NONE", "not compressed")); output.writeframes(b"\0\0" * 80)
             try:
                 window._show_current(); window._toggle_label("dog", True); window._toggle_label("cat", True)
+                self.assertTrue(window.audio_viewer.is_loading)
+                self.assertFalse(window.audio_viewer.play.isEnabled())
+                self.assertFalse(window.audio_viewer.loading_label.isHidden())
                 deadline = time.monotonic() + 2
-                while window.audio_viewer.waveform._tasks and time.monotonic() < deadline:
+                while (window.audio_viewer.waveform._tasks or window.audio_viewer.is_loading) and time.monotonic() < deadline:
                     QTest.qWait(20)
                 self.assertEqual(window.audio_viewer.title.text(), "animals.wav")
                 self.assertTrue(window.audio_viewer.waveform._values)
+                self.assertFalse(window.audio_viewer.is_loading)
+                self.assertTrue(window.audio_viewer.play.isEnabled())
                 self.assertEqual(window.session.annotations["animals.wav"], ["dog", "cat"])
             finally:
                 window.audio_viewer.clear(); self.app.processEvents()
