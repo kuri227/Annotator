@@ -15,7 +15,8 @@ env/
 
 # Build and packaging output
 build/
-dist/
+dist/*
+!dist/Annotator.exe
 *.egg-info/
 
 # Editor and OS files
